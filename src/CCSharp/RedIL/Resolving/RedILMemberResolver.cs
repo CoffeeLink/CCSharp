@@ -1,0 +1,8 @@
+using CCSharp.RedIL.Nodes;
+
+namespace CCSharp.RedIL.Resolving;
+
+public abstract class RedILMemberResolver
+{
+    public abstract ExpressionNode Resolve(Context context, ExpressionNode caller);
+}

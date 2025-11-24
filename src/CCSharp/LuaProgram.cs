@@ -1,0 +1,101 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using CCSharp.Attributes;
+using CCSharp.Lua;
+using CCSharp.RedIL;
+using ICSharpCode.Decompiler;
+using ICSharpCode.Decompiler.CSharp;
+using ICSharpCode.Decompiler.TypeSystem;
+
+namespace CCSharp;
+
+public class LuaProgram
+{
+    public static DecompilerSettings DecompilerSettings =
+        new()
+        {
+            ExtensionMethods = false,
+            NamedArguments = false,
+            QueryExpressions = false,
+            NullPropagation = false
+        };
+
+    public string Filename { get; set; }
+    public HashSet<string> Modules = new();
+    public string CompiledCode { get; set; }
+    public List<string> MainMethods = new();
+    
+    public LuaCompileFlags Flags { get; set; }
+
+    public string FullCode => string.Join("\n",
+        Modules.Select(module => $"local {module} = require(\"{module}\")").Union(new[] { CompiledCode })
+            .Union(MainMethods.Select(main => $"{main}()")));
+
+    public static LuaProgram FromType(Type type)
+    {
+        LuaProgramAttribute luaProgramAttribute = type.GetCustomAttribute<LuaProgramAttribute>();
+        LuaProgram program = new()
+        {
+            Filename = luaProgramAttribute?.Filename ?? $"{type.Name}.lua",
+            Flags = luaProgramAttribute?.Flags ?? LuaCompileFlags.None
+        };
+        var decompiler = new CSharpDecompiler(type.Assembly.Location, DecompilerSettings);
+        var syntaxTree = decompiler.Decompile(new List<EntityHandle> { MetadataTokens.EntityHandle(type.GetTypeInfo().MetadataToken) });
+        //Console.WriteLine(syntaxTree);
+        var compiler = new CSharpCompiler(program.Flags);
+        var rootNode = compiler.CompileNode(new DecompilationResult(syntaxTree));
+        program.Modules = compiler.MainResolver.RequiredModules;
+        program.CompiledCode = new CompilationInstance(rootNode).Compile();
+        HashSet<Type> compiledDependencies = new();
+        program.CompiledCode=$"{CompileDependencies(program, compiler.MainResolver.LuaClassDependencies, compiledDependencies)}\n{program.CompiledCode}";
+        foreach (MethodInfo methodInfo in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance))
+        {
+            if(methodInfo.GetCustomAttribute<LuaMainAttribute>() != null)
+                program.MainMethods.Add(methodInfo.Name);
+        }
+        return program;
+    }
+
+    private static string CompileDependencies(LuaProgram program, HashSet<Type> dependencies, HashSet<Type> compiledDependencies)
+    {
+        string compiledDependenciesString = "";
+        foreach (Type type in dependencies)
+        {
+            if (!compiledDependencies.Add(type)) continue;
+            var decompiler = new CSharpDecompiler(type.Assembly.Location, DecompilerSettings);
+            var syntaxTree = decompiler.Decompile(new List<EntityHandle>
+                { MetadataTokens.EntityHandle(type.GetTypeInfo().MetadataToken) });
+            //Console.WriteLine(syntaxTree);
+            var compiler = new CSharpCompiler(program.Flags, type.GetLuaClassName(program.Flags));
+            var rootNode = compiler.CompileNode(new DecompilationResult(syntaxTree));
+            foreach (string module in compiler.MainResolver.RequiredModules)
+            {
+                program.Modules.Add(module);
+            }
+            string subDependenciesString = CompileDependencies(program, compiler.MainResolver.LuaClassDependencies, compiledDependencies);
+            if(!string.IsNullOrEmpty(subDependenciesString)) 
+                compiledDependenciesString = $"{subDependenciesString}\n{compiledDependenciesString}".Trim('\n');;
+            compiledDependenciesString = $"{compiledDependenciesString}\n{new CompilationInstance(rootNode).Compile()}";
+        }
+        return compiledDependenciesString.Trim('\n');
+    }
+
+    public void Export(string directory = "", bool includeDependencies = true)
+    {
+        if (includeDependencies)
+        {
+            foreach (string module in Modules)
+            {
+                if (module == "linq")
+                    File.WriteAllText(Path.Combine(directory, "linq.lua"), ModuleDependencies.LINQ);
+            }
+        }
+
+        File.WriteAllText(Path.Combine(directory, Filename), FullCode);
+    }
+}
