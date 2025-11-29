@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using CCSharp.RedIL.Enums;
 
 namespace CCSharp.RedIL.Nodes;
@@ -55,6 +56,10 @@ public class ConstantValueNode : ExpressionNode
 
     public override string ToString()
     {
+        if (Value is IFormattable formattable)
+        {
+            return formattable.ToString(null, CultureInfo.InvariantCulture);
+        }
         return Value.ToString();
     }
 }
