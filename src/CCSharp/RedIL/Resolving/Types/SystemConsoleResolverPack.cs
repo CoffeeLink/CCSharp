@@ -24,6 +24,9 @@ class SystemConsoleResolverPack
         public static void WriteLine(double str) {}
 
         [RedILResolve(typeof(CallCustomMethodResolver), "print")]
+        public static void WriteLine(float str) {}
+
+        [RedILResolve(typeof(CallCustomMethodResolver), "print")]
         public static void WriteLine(byte str) {}
 
         [RedILResolve(typeof(CallCustomMethodResolver), "print")]
@@ -43,6 +46,9 @@ class SystemConsoleResolverPack
 
         [RedILResolve(typeof(CallCustomMethodResolver), "write")]
         public static void Write(double str) {}
+
+        [RedILResolve(typeof(CallCustomMethodResolver), "write")]
+        public static void Write(float str) {}
 
         [RedILResolve(typeof(CallCustomMethodResolver), "write")]
         public static void Write(byte str) {}
