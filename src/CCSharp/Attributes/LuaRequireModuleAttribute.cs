@@ -2,6 +2,7 @@ using System;
 
 namespace CCSharp.Attributes;
 
+[AttributeUsage(AttributeTargets.Class)]
 public class LuaRequireModuleAttribute : Attribute
 {
     public string Module { get; set; }

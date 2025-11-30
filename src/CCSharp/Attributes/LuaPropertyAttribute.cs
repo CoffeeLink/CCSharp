@@ -1,9 +1,11 @@
+using System;
 using CCSharp.RedIL.Enums;
 using CCSharp.RedIL.Resolving.Attributes;
 using CCSharp.RedIL.Resolving.CommonResolvers;
 
 namespace CCSharp.Attributes;
 
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class LuaPropertyAttribute : RedILResolve
 {
     public LuaPropertyAttribute(string key) : base(typeof(TableAccessMemberResolver), DataValueType.String, key) { }
